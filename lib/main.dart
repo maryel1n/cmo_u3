@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/products_provider.dart';
 import 'screen/home_screen.dart';
+import 'screen/auth/login_screen.dart';
 
-void main() {
+// Firebase
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const App());
 }
 
@@ -32,7 +39,8 @@ class App extends StatelessWidget {
             elevation: 0,
             centerTitle: true,
           ),
-          cardTheme: CardTheme(
+          // <- La corrección está aquí: usar CardThemeData en vez de CardTheme
+          cardTheme: CardThemeData(
             color: const Color(0xFF161A1E),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -41,7 +49,7 @@ class App extends StatelessWidget {
           ),
           dividerColor: const Color(0xFF2A2F36),
         ),
-        home: const HomeScreen(),
+        home: const LoginScreen(),
       ),
     );
   }

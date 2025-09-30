@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'services/products_provider.dart';
 import 'screen/home_screen.dart';
 import 'screen/auth/login_screen.dart';
@@ -26,29 +27,16 @@ class App extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'CMO U3',
+        // Tema global CLARO (Catálogo y resto de la app)
         theme: ThemeData(
           useMaterial3: true,
-          brightness: Brightness.dark,
+          brightness: Brightness.light,
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF4C6FFF),
-            brightness: Brightness.dark,
+            brightness: Brightness.light,
           ),
-          scaffoldBackgroundColor: const Color(0xFF0F1115),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF0F1115),
-            elevation: 0,
-            centerTitle: true,
-          ),
-          // <- La corrección está aquí: usar CardThemeData en vez de CardTheme
-          cardTheme: CardThemeData(
-            color: const Color(0xFF161A1E),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          dividerColor: const Color(0xFF2A2F36),
         ),
+        // Pantalla inicial (Login con su theme dark interno)
         home: const LoginScreen(),
       ),
     );

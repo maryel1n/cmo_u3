@@ -1,11 +1,1 @@
-{
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
-  },
-  "emulators": {
-    "functions": { "host": "127.0.0.1", "port": 5001 },
-    "firestore": { "host": "127.0.0.1", "port": 8080 },
-    "ui": { "enabled": true, "host": "127.0.0.1", "port": 4000 }
-  }
-}
+{"functions":{"source":"functions","runtime":"nodejs20"},"emulators":{"functions":{"host":"127.0.0.1","port":5001},"firestore":{"host":"127.0.0.1","port":8080},"ui":{"enabled":true,"host":"127.0.0.1","port":4000}},"flutter":{"platforms":{"android":{"default":{"projectId":"cmo-u3-quintanilla","appId":"1:450809494929:android:15f3f40914ec16e155ae30","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"cmo-u3-quintanilla","configurations":{"android":"1:450809494929:android:15f3f40914ec16e155ae30"}}}}}}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "450809494929",
+    "project_id": "cmo-u3-quintanilla",
+    "storage_bucket": "cmo-u3-quintanilla.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:450809494929:android:15f3f40914ec16e155ae30",
+        "android_client_info": {
+          "package_name": "com.example.cmo_u3"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDu_QaU8NHerucMFtqtr1RWK8wNQB8ieFc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

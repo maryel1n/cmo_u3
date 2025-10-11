@@ -1,0 +1,16 @@
+error: short read while indexing macos/Runner/AppDelegate.swift
+error: macos/Runner/AppDelegate.swift: failed to insert into database
+error: unable to index file 'macos/Runner/AppDelegate.swift'
+fatal: adding files failed
+error: short read while indexing macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json
+error: macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json: failed to insert into database
+error: unable to index file 'macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json'
+fatal: adding files failed
+error: short read while indexing macos/Runner/Configs/AppInfo.xcconfig
+error: macos/Runner/Configs/AppInfo.xcconfig: failed to insert into database
+error: unable to index file 'macos/Runner/Configs/AppInfo.xcconfig'
+fatal: adding files failed
+error: short read while indexing macos/RunnerTests/RunnerTests.swift
+error: macos/RunnerTests/RunnerTests.swift: failed to insert into database
+error: unable to index file 'macos/RunnerTests/RunnerTests.swift'
+fatal: adding files failed

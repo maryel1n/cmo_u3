@@ -1,0 +1,50 @@
+# --- Flutter / Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.melos_tool/
+.packages
+
+# Build outputs
+build/
+**/build/
+coverage/
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+
+# iOS / macOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Runner/GeneratedPluginRegistrant.*
+macos/Pods/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.*
+
+# Windows / Linux
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+
+# Web
+web/.dart_tool/
+
+# Firebase / Functions
+functions/node_modules/
+functions/.env*
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+**/.DS_Store
+
+# Skip macOS platform (not needed for Android)
+macos/

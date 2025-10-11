@@ -114,6 +114,89 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _showResetPasswordDialog(BuildContext context) async {
+    final emailCtrl = TextEditingController(text: _email.text.trim());
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: const Text('Restablecer contraseña'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Correo',
+                      hintText: 'tu@correo.cl',
+                      errorText: errorText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Te enviaremos un correo con el enlace para restablecer tu contraseña.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final email = emailCtrl.text.trim();
+                    if (email.isEmpty || !email.contains('@')) {
+                      setState(() => errorText = 'Ingresa un correo válido');
+                      return;
+                    }
+                    try {
+                      await FirebaseAuth.instance.sendPasswordResetEmail(
+                        email: email,
+                      );
+
+                      // Cierra el diálogo y muestra feedback
+                      Navigator.of(ctx).pop();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Correo de restablecimiento enviado a $email',
+                            ),
+                          ),
+                        );
+                      }
+                    } on FirebaseAuthException catch (e) {
+                      String msg = 'No se pudo enviar el correo';
+                      if (e.code == 'user-not-found') {
+                        msg = 'No existe un usuario con ese correo.';
+                      } else if (e.code == 'invalid-email') {
+                        msg = 'Correo inválido.';
+                      }
+                      setState(() => errorText = msg);
+                    } catch (_) {
+                      setState(
+                        () => errorText =
+                            'Ocurrió un error inesperado. Intenta nuevamente.',
+                      );
+                    }
+                  },
+                  child: const Text('Enviar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF0F1115);
@@ -222,7 +305,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // ¿Olvidaste tu contraseña?
                   TextButton(
-                    onPressed: _loading ? null : _resetPassword,
+                    onPressed: _loading
+                        ? null
+                        : () => _showResetPasswordDialog(context),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(46),

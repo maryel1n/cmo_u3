@@ -11,12 +11,14 @@ import 'firebase_options.dart';
 
 // Providers / servicios
 import 'services/products_provider.dart';
+import 'services/cart_provider.dart';
 
 // Gate
 import 'routes/auth_gate.dart';
 
 //Screens
 import 'screen/auth/register_screen.dart';
+import 'screen/cart_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +41,7 @@ class App extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ProductsProvider(), lazy: false),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -51,7 +54,10 @@ class App extends StatelessWidget {
             brightness: Brightness.light,
           ),
         ),
-        routes: {'/register': (_) => const RegisterScreen()},
+        routes: {
+          '/register': (_) => const RegisterScreen(),
+          '/cart': (_) => const CartScreen(),
+        },
         home: const AuthGate(),
       ),
     );

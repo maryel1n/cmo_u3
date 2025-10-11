@@ -10,6 +10,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _pass = TextEditingController();
   bool _obscure = true;
@@ -43,36 +44,73 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   Future<void> _signIn() async {
-    final email = _email.text.trim();
-    final pass = _pass.text;
-
-    if (email.isEmpty || pass.isEmpty) {
-      _showError('Ingresa correo y contraseña');
-      return;
-    }
-
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: pass,
+        email: _email.text.trim(),
+        password: _pass.text,
       );
-      // No navegamos manualmente: AuthGate detecta sesión y lleva al Home.
+      // AuthGate escuchará el cambio de sesión y te llevará al Home.
     } on FirebaseAuthException catch (e) {
-      String msg = 'Error al iniciar sesión';
-      if (e.code == 'user-not-found') msg = 'Usuario no encontrado';
-      if (e.code == 'wrong-password') msg = 'Contraseña incorrecta';
-      if (e.code == 'invalid-email') msg = 'Correo inválido';
-      _showError(msg);
+      final msg = switch (e.code) {
+        'invalid-credential' => 'Credenciales inválidas.',
+        'user-not-found' => 'Usuario no encontrado.',
+        'wrong-password' => 'Contraseña incorrecta.',
+        'invalid-email' => 'Correo inválido.',
+        _ => 'Error de inicio de sesión: ${e.code}',
+      };
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
+      }
     } catch (_) {
-      _showError('Ocurrió un problema');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error inesperado al iniciar sesión')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un correo válido para resetear.'),
+        ),
+      );
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Te enviamos un correo de restablecimiento a $email'),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      final msg = (e.code == 'user-not-found')
+          ? 'No existe un usuario con ese correo.'
+          : 'No se pudo enviar el correo (${e.code}).';
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error inesperado al enviar el correo')),
+        );
+      }
     }
   }
 
@@ -95,105 +133,127 @@ class _LoginScreenState extends State<LoginScreen> {
           centerTitle: true,
           foregroundColor: Colors.white,
         ),
+        inputDecorationTheme: const InputDecorationTheme(
+          // En Flutter 3.x el color del texto va en el propio TextField.style,
+          // aquí dejamos la decoración por defecto oscura.
+        ),
       ),
       child: Scaffold(
         appBar: AppBar(title: const Text('Inicio de Sesión')),
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 8),
-                Icon(Icons.shopping_bag_outlined, color: primary, size: 32),
-                const SizedBox(height: 6),
-                const Text(
-                  'Bienvenido de nuevo',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  Icon(Icons.shopping_bag_outlined, color: primary, size: 32),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Bienvenido de nuevo',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
 
-                // Email
-                TextField(
-                  controller: _email,
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: _field('Correo electrónico'),
-                  cursorColor: Colors.white,
-                ),
-                const SizedBox(height: 12),
+                  // Email
+                  TextFormField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    style: const TextStyle(
+                      color: Colors.white,
+                    ), // texto visible
+                    decoration: _field('Correo electrónico'),
+                    validator: (v) {
+                      final x = (v ?? '').trim();
+                      if (x.isEmpty) return 'Ingresa tu correo';
+                      if (!x.contains('@')) return 'Correo inválido';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
 
-                // Password
-                TextField(
-                  controller: _pass,
-                  style: const TextStyle(color: Colors.white),
-                  obscureText: _obscure,
-                  decoration: _field('Contraseña').copyWith(
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      icon: Icon(
-                        _obscure ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.white70,
+                  // Password
+                  TextFormField(
+                    controller: _pass,
+                    obscureText: _obscure,
+                    style: const TextStyle(
+                      color: Colors.white,
+                    ), // texto visible
+                    decoration: _field('Contraseña').copyWith(
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                        icon: Icon(
+                          _obscure ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.white70,
+                        ),
                       ),
                     ),
+                    validator: (v) {
+                      final x = v ?? '';
+                      if (x.isEmpty) return 'Ingresa tu contraseña';
+                      if (x.length < 6) return 'Mínimo 6 caracteres';
+                      return null;
+                    },
                   ),
-                  cursorColor: Colors.white,
-                ),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // Ingresar (botón blanco pill)
-                ElevatedButton(
-                  onPressed: _loading ? null : _signIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: const StadiumBorder(),
-                    minimumSize: const Size.fromHeight(46),
+                  // Ingresar (botón blanco pill)
+                  ElevatedButton(
+                    onPressed: _loading ? null : _signIn,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      shape: const StadiumBorder(),
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Ingresar'),
                   ),
-                  child: _loading
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Ingresar'),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
-                // ¿Olvidaste tu contraseña?
-                TextButton(
-                  onPressed: () {},
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(46),
+                  // ¿Olvidaste tu contraseña?
+                  TextButton(
+                    onPressed: _loading ? null : _resetPassword,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    child: const Text('¿Olvidaste tu contraseña?'),
                   ),
-                  child: const Text('¿Olvidaste tu contraseña?'),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
-                // Crear cuenta (outline)
-                OutlinedButton(
-                  onPressed: _loading
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
-                            ),
-                          );
-                        },
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF2A2F36)),
-                    foregroundColor: Colors.white,
-                    shape: const StadiumBorder(),
-                    minimumSize: const Size.fromHeight(46),
+                  // Crear cuenta (outline)
+                  OutlinedButton(
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterScreen(),
+                              ),
+                            );
+                          },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF2A2F36)),
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    child: const Text('Crear cuenta'),
                   ),
-                  child: const Text('Crear cuenta'),
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),

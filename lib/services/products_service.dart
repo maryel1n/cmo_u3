@@ -1,75 +1,89 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:http/http.dart' as http;
 
 import '../models/product.dart';
+import 'env.dart';
 
+/// Servicio HTTP que consume tus Cloud Functions (emulador) con Basic Auth.
+/// Endpoints definidos en env.dart (listProducts, createProduct, etc.)
 class ProductsService {
-  // Basic Auth del backend (emulador)
-  static const _headers = <String, String>{
-    'Authorization': 'Basic dGVzdDp0ZXN0MjAyMw==',
+  final http.Client _client;
+
+  ProductsService({http.Client? client}) : _client = client ?? http.Client();
+
+  Map<String, String> get _headers => {
+    'Authorization': Env.basicAuth,
     'Content-Type': 'application/json',
   };
 
-  // Host del emulador visto desde el dispositivo
-  String get _host {
-    if (kIsWeb) return '127.0.0.1';
-    if (Platform.isAndroid) return '10.0.2.2'; // Android Emulator -> host
-    return '127.0.0.1'; // iOS simulator / desktop
-  }
-
-  // BASE CORRECTA **con /api** ya incluido y SIN guiones
-  Uri _uri(String path) =>
-      Uri.parse('http://$_host:5001/cmo-u3-quintanilla/us-central1/api$path');
-
+  /// Lista de productos
   Future<List<Product>> fetchProducts() async {
-    final res = await http.get(
-      _uri('/ejemplos/product_list_rest/'),
-      headers: _headers,
-    );
+    final uri = Uri.parse(Env.listProducts);
+    final res = await _client.get(uri, headers: _headers);
 
     if (res.statusCode != 200) {
-      throw Exception('GET ${res.statusCode}: ${res.body}');
+      throw Exception('GET $uri failed (${res.statusCode}): ${res.body}');
     }
 
-    final map = json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final list = (map['listado'] as List).cast<Map<String, dynamic>>();
-    return list.map(Product.fromJson).toList();
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final listado = (data['listado'] as List? ?? []);
+    return listado
+        .map((e) => Product.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 
-  // (Opcional) CRUD restante si lo usas:
-  Future<String> createProduct(Product p) async {
-    final res = await http.post(
-      _uri('/ejemplos/product_create/'),
-      headers: _headers,
-      body: json.encode(p.toJson()),
-    );
-    if (res.statusCode != 200) {
-      throw Exception('POST ${res.statusCode}: ${res.body}');
+  /// Crear producto. Devuelve el id creado.
+  Future<String> createProduct({
+    required String productName,
+    required int price,
+    required int stock,
+    String category = 'general',
+    String estado = 'Activo',
+  }) async {
+    final uri = Uri.parse(Env.createProduct);
+    final body = jsonEncode({
+      'productName': productName,
+      'price': price,
+      'stock': stock,
+      'category': category,
+      'estado': estado,
+    });
+
+    final res = await _client.post(uri, headers: _headers, body: body);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('POST $uri failed (${res.statusCode}): ${res.body}');
     }
-    final map = json.decode(res.body) as Map<String, dynamic>;
-    return map['id'] as String;
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return (data['id'] as String?) ?? '';
   }
 
-  Future<void> updateProduct(String id, Map<String, dynamic> fields) async {
-    final res = await http.put(
-      _uri('/ejemplos/product_update/$id'),
+  /// Actualizar producto por ID
+  Future<void> update(String id, Map<String, dynamic> data) async {
+    final uri = Uri.parse(Env.updateProduct(id));
+    final res = await _client.put(
+      uri,
       headers: _headers,
-      body: json.encode(fields),
+      body: jsonEncode(data),
     );
-    if (res.statusCode != 200) {
-      throw Exception('PUT ${res.statusCode}: ${res.body}');
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('PUT $uri failed (${res.statusCode}): ${res.body}');
     }
   }
 
-  Future<void> deleteProduct(String id) async {
-    final res = await http.delete(
-      _uri('/ejemplos/product_delete/$id'),
-      headers: _headers,
-    );
-    if (res.statusCode != 200) {
-      throw Exception('DELETE ${res.statusCode}: ${res.body}');
+  /// Eliminar producto por ID
+  Future<void> delete(String id) async {
+    final uri = Uri.parse(Env.deleteProduct(id));
+    final res = await _client.delete(uri, headers: _headers);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('DELETE $uri failed (${res.statusCode}): ${res.body}');
     }
+  }
+
+  void dispose() {
+    _client.close();
   }
 }

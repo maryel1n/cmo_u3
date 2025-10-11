@@ -250,6 +250,7 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final outOfStock = (item.stock <= 0);
 
     return Card(
       elevation: 1.5,
@@ -264,7 +265,7 @@ class _ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Imagen y botón agregar arriba a la derecha
+            // Imagen y botones superpuestos
             Expanded(
               child: Stack(
                 children: [
@@ -285,12 +286,41 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (outOfStock)
+                    Positioned(
+                      left: 10,
+                      top: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Agotado',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   Positioned(
                     right: 10,
                     top: 10,
                     child: _CircleIcon(
                       icon: Icons.add_shopping_cart_outlined,
                       onTap: () {
+                        if (outOfStock) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Producto sin stock')),
+                          );
+                          return;
+                        }
                         // agrega 1 unidad del producto al carrito
                         context.read<CartProvider>().add(item, qty: 1);
 
@@ -307,7 +337,7 @@ class _ProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            // Nombre y precio
+            // Nombre, precio y stock
             Padding(
               padding: const EdgeInsets.only(
                 left: 14,
@@ -328,12 +358,24 @@ class _ProductCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '\$${item.price}',
-                    style: TextStyle(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        '\$${item.price}',
+                        style: TextStyle(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '· Stock: ${item.stock}',
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

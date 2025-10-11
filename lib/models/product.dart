@@ -1,3 +1,4 @@
+// lib/models/product.dart
 class Product {
   final String id;
   final String productName;
@@ -6,7 +7,7 @@ class Product {
   final String category;
   final String estado;
 
-  const Product({
+  Product({
     required this.id,
     required this.productName,
     required this.price,
@@ -15,23 +16,31 @@ class Product {
     required this.estado,
   });
 
-  factory Product.fromJson(Map<String, dynamic> json) {
+  /// Constructor de fábrica: crea un Product desde un mapa (JSON)
+  factory Product.fromMap(Map<String, dynamic> map) {
     return Product(
-      id: (json['id'] ?? '') as String,
-      productName: (json['productName'] ?? '(sin nombre)') as String,
-      price: (json['price'] ?? 0) as int,
-      stock: (json['stock'] ?? 0) as int,
-      category: (json['category'] ?? 'general') as String,
-      estado: (json['estado'] ?? 'Activo') as String,
+      id: map['id']?.toString() ?? '',
+      productName: map['productName'] ?? '',
+      price: map['price'] is int
+          ? map['price']
+          : int.tryParse(map['price']?.toString() ?? '0') ?? 0,
+      stock: map['stock'] is int
+          ? map['stock']
+          : int.tryParse(map['stock']?.toString() ?? '0') ?? 0,
+      category: map['category'] ?? '',
+      estado: map['estado'] ?? '',
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'productName': productName,
-    'price': price,
-    'stock': stock,
-    'category': category,
-    'estado': estado,
-  };
+  /// Convierte el objeto Product a Map (opcional, útil para updates)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'productName': productName,
+      'price': price,
+      'stock': stock,
+      'category': category,
+      'estado': estado,
+    };
+  }
 }

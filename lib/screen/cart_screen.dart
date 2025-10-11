@@ -1,6 +1,8 @@
+// lib/screen/cart_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cmo_u3/services/cart_provider.dart';
+import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -24,7 +26,7 @@ class CartScreen extends StatelessWidget {
       body: items.isEmpty
           ? const Center(child: Text('Tu carrito está vacío'))
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (_, i) {
@@ -108,27 +110,65 @@ class CartScreen extends StatelessWidget {
                 );
               },
             ),
+
+      // ⬇️ BottomSheet con total + botón Pagar (navega a Checkout)
       bottomSheet: items.isEmpty
           ? null
-          : Container(
-              color: Theme.of(context).colorScheme.surface,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Total (${cart.totalItems} ítems)',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+          : SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
                     ),
-                  ),
-                  Text(
-                    '\$${cart.totalPrice}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Total',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Text(
+                          '\$${cart.totalPrice}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CheckoutScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.payment),
+                        label: const Text(
+                          'Pagar',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
     );

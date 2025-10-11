@@ -22,6 +22,9 @@ class Env {
   static String updateProduct(String id) => '$_base/product_update/$id';
   static String deleteProduct(String id) => '$_base/product_delete/$id';
 
+  // Parte 2 — órdenes
+  static String get createOrder => '$_base/order_create/';
+
   // TODO(Parte 2): si despliegan a producción,
   // crear otro getter baseProd y conmutar según Flavor/const bool.
 }

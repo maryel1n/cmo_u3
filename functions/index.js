@@ -3,7 +3,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
 const cors = require("cors");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
 // Inicializa Admin SDK y Firestore
 initializeApp();
@@ -34,7 +34,7 @@ function basicAuth(req, res, next) {
   res.status(403).json({ ok: false, error: "Invalid credentials" });
 }
 
-// ---- Endpoints de productos ----
+/* --------------------------- PRODUCTOS (ya tenías) -------------------------- */
 
 // GET /ejemplos/product_list_rest/
 app.get("/ejemplos/product_list_rest/", basicAuth, async (_req, res) => {
@@ -94,6 +94,58 @@ app.delete("/ejemplos/product_delete/:id", basicAuth, async (req, res) => {
   }
   await ref.delete();
   res.json({ ok: true, id });
+});
+
+/* ------------------------------- ÓRDENES NUEVO ------------------------------ */
+/**
+ * POST /ejemplos/order_create/
+ * Body esperado:
+ * {
+ *   userId: "abc" | null,
+ *   items: [{ productId, name, price, qty, subtotal }],
+ *   total: 12345,
+ *   paymentMethod: "tarjeta" | "efectivo" | "transferencia",
+ *   shipping: { name, address, comuna }
+ * }
+ */
+app.post("/ejemplos/order_create/", basicAuth, async (req, res) => {
+  const b = req.body || {};
+  const items = Array.isArray(b.items) ? b.items : [];
+  if (!items.length) {
+    res.status(400).json({ ok: false, error: "items es requerido (array con productos)" });
+    return;
+  }
+
+  // Sanitiza items
+  const cleanItems = items.map((it) => ({
+    productId: String(it.productId || ""),
+    name: String(it.name || ""),
+    price: Number(it.price) || 0,
+    qty: Number(it.qty) || 0,
+    subtotal: Number(it.subtotal) || ((Number(it.price) || 0) * (Number(it.qty) || 0)),
+  }));
+
+  const calcTotal = cleanItems.reduce((s, it) => s + (Number(it.subtotal) || 0), 0);
+  const total = Number.isFinite(b.total) ? Number(b.total) : calcTotal;
+
+  const doc = {
+    userId: b.userId || null,
+    items: cleanItems,
+    total,
+    payment: {
+      method: b.paymentMethod || "efectivo",
+    },
+    shipping: {
+      name: b.shipping?.name || "",
+      address: b.shipping?.address || "",
+      comuna: b.shipping?.comuna || "",
+    },
+    status: "CREATED",
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  const ref = await db.collection("orders").add(doc);
+  res.json({ ok: true, id: ref.id });
 });
 
 // Exporta la API HTTP (us-central1)

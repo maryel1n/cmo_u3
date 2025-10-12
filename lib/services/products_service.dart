@@ -1,75 +1,87 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:http/http.dart' as http;
 
+import 'env.dart';
 import '../models/product.dart';
 
 class ProductsService {
-  // Basic Auth del backend (emulador)
-  static const _headers = <String, String>{
-    'Authorization': 'Basic dGVzdDp0ZXN0MjAyMw==',
+  Map<String, String> _headers() => {
     'Content-Type': 'application/json',
+    'Authorization': Env.basicAuth,
   };
-
-  // Host del emulador visto desde el dispositivo
-  String get _host {
-    if (kIsWeb) return '127.0.0.1';
-    if (Platform.isAndroid) return '10.0.2.2'; // Android Emulator -> host
-    return '127.0.0.1'; // iOS simulator / desktop
-  }
-
-  // BASE CORRECTA **con /api** ya incluido y SIN guiones
-  Uri _uri(String path) =>
-      Uri.parse('http://$_host:5001/cmo-u3-quintanilla/us-central1/api$path');
 
   Future<List<Product>> fetchProducts() async {
     final res = await http.get(
-      _uri('/ejemplos/product_list_rest/'),
-      headers: _headers,
+      Uri.parse(Env.listProducts),
+      headers: _headers(),
     );
-
-    if (res.statusCode != 200) {
-      throw Exception('GET ${res.statusCode}: ${res.body}');
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        'Error listando productos: ${res.statusCode} ${res.body}',
+      );
     }
-
-    final map = json.decode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final list = (map['listado'] as List).cast<Map<String, dynamic>>();
-    return list.map(Product.fromJson).toList();
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = (data['listado'] as List<dynamic>)
+        .map((e) => Product.fromMap(e as Map<String, dynamic>))
+        .toList();
+    return list;
   }
 
-  // (Opcional) CRUD restante si lo usas:
-  Future<String> createProduct(Product p) async {
+  Future<String> create({
+    required String productName,
+    required int price,
+    required int stock,
+    required String category,
+    String estado = 'Activo',
+  }) async {
     final res = await http.post(
-      _uri('/ejemplos/product_create/'),
-      headers: _headers,
-      body: json.encode(p.toJson()),
+      Uri.parse(Env.createProduct),
+      headers: _headers(),
+      body: jsonEncode({
+        'productName': productName,
+        'price': price,
+        'stock': stock,
+        'category': category,
+        'estado': estado,
+      }),
     );
-    if (res.statusCode != 200) {
-      throw Exception('POST ${res.statusCode}: ${res.body}');
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Error creando producto: ${res.statusCode} ${res.body}');
     }
-    final map = json.decode(res.body) as Map<String, dynamic>;
-    return map['id'] as String;
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (data['ok'] != true || data['id'] == null) {
+      throw Exception('Respuesta inesperada al crear: ${res.body}');
+    }
+    return data['id'] as String;
   }
 
-  Future<void> updateProduct(String id, Map<String, dynamic> fields) async {
+  /// ← CAMBIO: usar PUT para el endpoint /product_update/:id
+  Future<void> update(String id, Map<String, dynamic> payload) async {
     final res = await http.put(
-      _uri('/ejemplos/product_update/$id'),
-      headers: _headers,
-      body: json.encode(fields),
+      Uri.parse(Env.updateProduct(id)),
+      headers: _headers(),
+      body: jsonEncode(payload),
     );
-    if (res.statusCode != 200) {
-      throw Exception('PUT ${res.statusCode}: ${res.body}');
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Error actualizando $id: ${res.statusCode} ${res.body}');
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (data['ok'] != true) {
+      throw Exception('Respuesta inesperada al actualizar: ${res.body}');
     }
   }
 
-  Future<void> deleteProduct(String id) async {
+  Future<void> delete(String id) async {
     final res = await http.delete(
-      _uri('/ejemplos/product_delete/$id'),
-      headers: _headers,
+      Uri.parse(Env.deleteProduct(id)),
+      headers: _headers(),
     );
-    if (res.statusCode != 200) {
-      throw Exception('DELETE ${res.statusCode}: ${res.body}');
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Error eliminando $id: ${res.statusCode} ${res.body}');
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (data['ok'] != true) {
+      throw Exception('Respuesta inesperada al eliminar: ${res.body}');
     }
   }
 }

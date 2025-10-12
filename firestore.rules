@@ -2,6 +2,30 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Catálogo de productos
+    match /products/{id} {
+      // Lectura abierta (catálogo público)
+      allow read: if true;
+
+      // Escrituras SOLO desde backend (Admin SDK en Cloud Functions).
+      allow create, update, delete: if false;
+    }
+
+    // Órdenes de compra
+    match /orders/{orderId} {
+      // Crear orden: requiere estar autenticado
+      allow create: if request.auth != null;
+
+      // Leer: solo el dueño de la orden
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+
+      // Bloquear updates/deletes desde cliente
+      allow update, delete: if false;
+    }
+
+    // Todo lo demás bloqueado
     match /{document=**} {
       allow read, write: if false;
     }

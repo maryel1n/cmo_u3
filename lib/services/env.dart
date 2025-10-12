@@ -22,6 +22,22 @@ class Env {
   static String updateProduct(String id) => '$_base/product_update/$id';
   static String deleteProduct(String id) => '$_base/product_delete/$id';
 
+  // Parte 2 — órdenes
+  static String get createOrder => '$_base/order_create/';
+
+  // Correos con permiso de administrador (puedes agregar más)
+  static const List<String> adminEmails = ['maryelinqc@gmail.com'];
+
+  /// Helper para verificar si un correo es admin.
+  /// - Coincidencia exacta con la lista `adminEmails`
+  /// - O si contiene `+admin` (ej: user+admin@dominio.com)
+  static bool isAdmin(String email) {
+    final e = email.trim().toLowerCase();
+    if (e.isEmpty) return false;
+    if (e.contains('+admin')) return true;
+    return adminEmails.any((a) => a.toLowerCase() == e);
+  }
+
   // TODO(Parte 2): si despliegan a producción,
   // crear otro getter baseProd y conmutar según Flavor/const bool.
 }

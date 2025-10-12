@@ -2,15 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../models/product.dart';
+import '../services/env.dart';
+import '../services/cart_provider.dart';
 import '../services/products_provider.dart';
-import '../routes/auth_gate.dart';
+import '../services/products_service.dart';
 
-class HomeScreen extends StatelessWidget {
+import 'cart_screen.dart';
+import 'product_form_screen.dart';
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _query = '';
+
+  List<Product> _filtered(List<Product> items) {
+    if (_query.trim().isEmpty) return items;
+    final q = _query.toLowerCase();
+    return items.where((p) => p.productName.toLowerCase().contains(q)).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.watch<ProductsProvider>();
+    final cart = context.watch<CartProvider>();
+    final scheme = Theme.of(context).colorScheme;
+
+    // Admin por email (normalizado en minúsculas)
+    final email =
+        FirebaseAuth.instance.currentUser?.email?.trim().toLowerCase() ?? '';
+    final isAdmin = Env.adminEmails.map((e) => e.toLowerCase()).contains(email);
 
     Widget body;
     if (p.isLoading) {
@@ -36,80 +62,47 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       );
-    } else if (p.items.isEmpty) {
-      body = const Center(child: Text('No hay productos'));
     } else {
+      final items = _filtered(p.items);
+
       body = RefreshIndicator(
         onRefresh: () => context.read<ProductsProvider>().refresh(),
-        child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-          itemCount: p.items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (_, i) {
-            final it = p.items[i];
-            return Card(
-              elevation: 1.5,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceVariant.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.local_mall_outlined),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            it.productName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              _Chip(text: it.category),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Stock: ${it.stock}',
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '\$${it.price}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                child: _SearchField(
+                  onChanged: (v) => setState(() => _query = v),
                 ),
               ),
-            );
-          },
+            ),
+            if (items.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: Text('No hay productos')),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                sliver: SliverGrid(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) =>
+                        _ProductCard(item: items[i], isAdmin: isAdmin),
+                    childCount: items.length,
+                  ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.74,
+                  ),
+                ),
+              ),
+          ],
         ),
       );
     }
@@ -123,48 +116,360 @@ class HomeScreen extends StatelessWidget {
             tooltip: 'Actualizar',
             onPressed: () => context.read<ProductsProvider>().refresh(),
           ),
+          // Carrito con badge
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  tooltip: 'Carrito',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CartScreen()),
+                    );
+                  },
+                ),
+                if (cart.totalItems > 0)
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        '${cart.totalItems}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Logout
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Salir',
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                // Reemplaza TODA la pila por AuthGate (vuelve a Login)
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const AuthGate()),
-                  (route) => false,
-                );
-              }
             },
           ),
         ],
       ),
+
       body: body,
+
+      // FAB solo para admin → crear producto
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProductFormScreen()),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar'),
+            )
+          : null,
+
+      // Botón inferior para revisar carrito (funcional)
+      bottomNavigationBar: Consumer<CartProvider>(
+        builder: (context, c, _) {
+          final hasItems = c.totalItems > 0;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: hasItems
+                      ? () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CartScreen(),
+                            ),
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  label: Text(
+                    hasItems
+                        ? 'Revisar carrito • ${c.totalItems} ítems • \$${c.totalPrice}'
+                        : 'Carrito vacío',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-class _Chip extends StatelessWidget {
-  final String text;
-  const _Chip({required this.text});
+class _SearchField extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const _SearchField({required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.primary.withOpacity(0.10),
-        border: Border.all(color: scheme.primary.withOpacity(0.25)),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: scheme.primary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+    return TextField(
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: 'Buscar productos',
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: scheme.surface.withOpacity(0.6),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
         ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.4)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.primary.withOpacity(0.45)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  final Product item;
+  final bool isAdmin;
+  const _ProductCard({required this.item, required this.isAdmin});
+
+  void _showAdminMenu(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Editar'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProductFormScreen(initial: item),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Eliminar'),
+              textColor: Colors.redAccent,
+              iconColor: Colors.redAccent,
+              onTap: () async {
+                Navigator.of(context).pop();
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Eliminar producto'),
+                    content: Text('¿Eliminar "${item.productName}"?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Eliminar'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  try {
+                    await ProductsService().delete(item.id!);
+                    if (context.mounted) {
+                      await context.read<ProductsProvider>().refresh();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Producto eliminado')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error al eliminar: $e')),
+                      );
+                    }
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onLongPress: isAdmin ? () => _showAdminMenu(context) : null,
+      child: Card(
+        elevation: 1.5,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: InkWell(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Vista: ${item.productName}')),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Imagen/placeholder + acciones
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              scheme.surfaceVariant.withOpacity(0.45),
+                              scheme.surfaceVariant.withOpacity(0.2),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.image_outlined, size: 44),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _CircleIcon(
+                            icon: Icons.add_shopping_cart_outlined,
+                            onTap: () {
+                              context.read<CartProvider>().add(item, qty: 1);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Agregado: ${item.productName}',
+                                  ),
+                                  duration: const Duration(milliseconds: 900),
+                                ),
+                              );
+                            },
+                          ),
+                          if (isAdmin) const SizedBox(width: 8),
+                          if (isAdmin)
+                            _CircleIcon(
+                              icon: Icons.more_horiz,
+                              onTap: () => _showAdminMenu(context),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Nombre y precio
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 10,
+                  bottom: 10,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$${item.price}',
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CircleIcon extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _CircleIcon({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 20, color: scheme.onSurfaceVariant),
       ),
     );
   }

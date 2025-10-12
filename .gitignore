@@ -48,3 +48,6 @@ ui-debug.log*
 
 # Skip macOS platform (not needed for Android)
 macos/
+
+# Ignore Flutter temp files
+.flutter-plugins-dependencies*

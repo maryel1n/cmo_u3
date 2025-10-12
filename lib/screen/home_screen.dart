@@ -20,36 +20,143 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _query = '';
+  String? _selectedCategory;
+
+  List<Product> _filtered(List<Product> items) {
+    Iterable<Product> res = items;
+
+    // Filtro por texto
+    final q = _query.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      res = res.where((p) => p.productName.toLowerCase().contains(q));
+    }
+
+    // Filtro por categoría
+    if (_selectedCategory != null && _selectedCategory!.isNotEmpty) {
+      final c = _selectedCategory!.toLowerCase();
+      res = res.where((p) => (p.category ?? '').toLowerCase() == c);
+    }
+
+    return res.toList();
+  }
+
+  List<String> _categoriesFrom(List<Product> items) {
+    final set = <String>{};
+    for (final p in items) {
+      final c = (p.category ?? '').trim();
+      if (c.isNotEmpty) set.add(c);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    // Productos y carrito
     final p = context.watch<ProductsProvider>();
     final cart = context.watch<CartProvider>();
-    final items = p.items;
+    final scheme = Theme.of(context).colorScheme;
 
-    // Admin según env
     final email = FirebaseAuth.instance.currentUser?.email ?? '';
     final isAdmin = Env.adminEmails.contains(email);
 
+    Widget body;
+    if (p.isLoading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (p.error != null) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                p.error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => context.read<ProductsProvider>().fetch(),
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      final items = p.items;
+      final filtered = _filtered(items);
+      final categories = _categoriesFrom(items);
+
+      body = RefreshIndicator(
+        onRefresh: () => context.read<ProductsProvider>().refresh(),
+        child: CustomScrollView(
+          slivers: [
+            // Buscador
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                child: _SearchField(
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+              ),
+            ),
+            // Chips de categorías (incluye "Todas")
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _CategoryChips(
+                  categories: categories,
+                  selected: _selectedCategory,
+                  onSelect: (value) {
+                    setState(() {
+                      _selectedCategory = value;
+                    });
+                  },
+                ),
+              ),
+            ),
+            if (filtered.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: Text('No hay productos')),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                sliver: SliverGrid(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) =>
+                        _ProductCard(item: filtered[i], isAdmin: isAdmin),
+                    childCount: filtered.length,
+                  ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.74,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Productos'),
+        title: const Text('Catálogo'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
             onPressed: () => context.read<ProductsProvider>().refresh(),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Salir',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
-          ),
-          // Carrito con badge
+          // Ícono de carrito con badge
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Stack(
@@ -97,105 +204,136 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      body: body,
 
-      // Grid de productos
-      body: p.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : p.error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      p.error!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () =>
-                          context.read<ProductsProvider>().refresh(),
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : CustomScrollView(
-              slivers: [
-                if (items.isEmpty)
-                  const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(child: Text('No hay productos')),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 80),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) =>
-                            _ProductCard(item: items[i], isAdmin: isAdmin),
-                        childCount: items.length,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
-                            childAspectRatio: 0.74,
-                          ),
-                    ),
-                  ),
-              ],
-            ),
-
-      // Botón inferior para revisar carrito
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: cart.totalItems > 0
-                  ? () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const CartScreen()),
-                      );
-                    }
-                  : null,
-              icon: const Icon(Icons.shopping_cart_outlined),
-              label: Text(
-                cart.totalItems > 0
-                    ? 'Revisar carrito • ${cart.totalItems} ítems • \$${cart.totalPrice}'
-                    : 'Carrito vacío',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      // FAB solo para admin → Crear producto
+      // FAB solo admin (crear producto)
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
+              icon: const Icon(Icons.add),
+              label: const Text('Producto'),
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ProductFormScreen()),
                 );
               },
-              icon: const Icon(Icons.add),
-              label: const Text('Nuevo'),
             )
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
+      // Botón inferior para ir al carrito
+      bottomNavigationBar: Consumer<CartProvider>(
+        builder: (context, cart, _) {
+          final hasItems = cart.totalItems > 0;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: hasItems
+                      ? () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CartScreen(),
+                            ),
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  label: Text(
+                    hasItems
+                        ? 'Revisar carrito • ${cart.totalItems} ítems • \$${cart.totalPrice}'
+                        : 'Carrito vacío',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-// ---------- CARD DE PRODUCTO + MENÚ ADMIN (Editar / Eliminar) ----------
+class _SearchField extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const _SearchField({required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return TextField(
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: 'Buscar productos',
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: scheme.surface.withOpacity(0.6),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(0.4)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide(color: scheme.primary.withOpacity(0.45)),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryChips extends StatelessWidget {
+  final List<String> categories;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+  const _CategoryChips({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final chips = <Widget>[];
+
+    // "Todas"
+    chips.add(
+      ChoiceChip(
+        label: const Text('Todas'),
+        selected: selected == null,
+        onSelected: (_) => onSelect(null),
+      ),
+    );
+
+    for (final c in categories) {
+      chips.add(
+        ChoiceChip(
+          label: Text(c),
+          selected: selected == c,
+          onSelected: (_) => onSelect(c),
+          selectedColor: scheme.primary.withOpacity(0.18),
+          labelStyle: TextStyle(
+            color: selected == c ? scheme.primary : scheme.onSurface,
+            fontWeight: selected == c ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+  }
+}
+
 class _ProductCard extends StatelessWidget {
   final Product item;
   final bool isAdmin;
@@ -221,7 +359,6 @@ class _ProductCard extends StatelessWidget {
                 );
               },
             ),
-            // ⬇️ Eliminación (la modificación que pediste)
             ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text('Eliminar'),
@@ -280,95 +417,95 @@ class _ProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
-        onTap: () {},
+        onTap: () {
+          // Aquí podría ir una pantalla de detalle (mock simple)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Vista: ${item.productName}')));
+        },
         onLongPress: isAdmin ? () => _showAdminMenu(context) : null,
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cuerpo
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // “Imagen”
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          scheme.surfaceVariant.withOpacity(0.45),
-                          scheme.surfaceVariant.withOpacity(0.2),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.image_outlined, size: 44),
-                    ),
-                  ),
-                ),
-                // Nombre + precio
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 14,
-                    right: 14,
-                    top: 10,
-                    bottom: 10,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.productName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '\$${item.price}',
-                        style: TextStyle(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (item.stock != null)
-                        Text(
-                          'Stock: ${item.stock}',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            // Acciones arriba a la derecha
-            Positioned(
-              right: 10,
-              top: 10,
-              child: Row(
+            // Imagen/placeholder + acciones arriba derecha
+            Expanded(
+              child: Stack(
                 children: [
-                  _CircleIcon(
-                    icon: Icons.add_shopping_cart_outlined,
-                    onTap: () {
-                      context.read<CartProvider>().add(item, qty: 1);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Agregado: ${item.productName}'),
-                          duration: const Duration(milliseconds: 900),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            scheme.surfaceVariant.withOpacity(0.45),
+                            scheme.surfaceVariant.withOpacity(0.2),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
-                      );
-                    },
-                  ),
-                  if (isAdmin) const SizedBox(width: 8),
-                  if (isAdmin)
-                    _CircleIcon(
-                      icon: Icons.more_horiz,
-                      onTap: () => _showAdminMenu(context),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.image_outlined, size: 44),
+                      ),
                     ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _CircleIcon(
+                          icon: Icons.add_shopping_cart_outlined,
+                          onTap: () {
+                            context.read<CartProvider>().add(item, qty: 1);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Agregado: ${item.productName}'),
+                                duration: const Duration(milliseconds: 900),
+                              ),
+                            );
+                          },
+                        ),
+                        if (isAdmin) const SizedBox(width: 8),
+                        if (isAdmin)
+                          _CircleIcon(
+                            icon: Icons.more_horiz,
+                            onTap: () => _showAdminMenu(context),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Nombre / precio
+            Padding(
+              padding: const EdgeInsets.only(
+                left: 14,
+                right: 14,
+                top: 10,
+                bottom: 10,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.productName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '\$${item.price}',
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),

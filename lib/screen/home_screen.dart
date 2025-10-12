@@ -1,13 +1,12 @@
-// lib/screen/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/product.dart';
 import '../services/env.dart';
+import '../services/cart_provider.dart';
 import '../services/products_provider.dart';
 import '../services/products_service.dart';
-import '../services/cart_provider.dart';
 
 import 'cart_screen.dart';
 import 'product_form_screen.dart';
@@ -21,34 +20,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _query = '';
-  String? _selectedCategory;
 
   List<Product> _filtered(List<Product> items) {
-    Iterable<Product> res = items;
-
-    // Filtro por texto
-    final q = _query.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      res = res.where((p) => p.productName.toLowerCase().contains(q));
-    }
-
-    // Filtro por categoría
-    if (_selectedCategory != null && _selectedCategory!.isNotEmpty) {
-      final c = _selectedCategory!.toLowerCase();
-      res = res.where((p) => (p.category ?? '').toLowerCase() == c);
-    }
-
-    return res.toList();
-  }
-
-  List<String> _categoriesFrom(List<Product> items) {
-    final set = <String>{};
-    for (final p in items) {
-      final c = (p.category ?? '').trim();
-      if (c.isNotEmpty) set.add(c);
-    }
-    final list = set.toList()..sort();
-    return list;
+    if (_query.trim().isEmpty) return items;
+    final q = _query.toLowerCase();
+    return items.where((p) => p.productName.toLowerCase().contains(q)).toList();
   }
 
   @override
@@ -57,8 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final cart = context.watch<CartProvider>();
     final scheme = Theme.of(context).colorScheme;
 
-    final email = FirebaseAuth.instance.currentUser?.email ?? '';
-    final isAdmin = Env.adminEmails.contains(email);
+    // Admin por email (normalizado en minúsculas)
+    final email =
+        FirebaseAuth.instance.currentUser?.email?.trim().toLowerCase() ?? '';
+    final isAdmin = Env.adminEmails.map((e) => e.toLowerCase()).contains(email);
 
     Widget body;
     if (p.isLoading) {
@@ -85,15 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } else {
-      final items = p.items;
-      final filtered = _filtered(items);
-      final categories = _categoriesFrom(items);
+      final items = _filtered(p.items);
 
       body = RefreshIndicator(
         onRefresh: () => context.read<ProductsProvider>().refresh(),
         child: CustomScrollView(
           slivers: [
-            // Buscador
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
@@ -102,22 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            // Chips de categorías (incluye "Todas")
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: _CategoryChips(
-                  categories: categories,
-                  selected: _selectedCategory,
-                  onSelect: (value) {
-                    setState(() {
-                      _selectedCategory = value;
-                    });
-                  },
-                ),
-              ),
-            ),
-            if (filtered.isEmpty)
+            if (items.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(child: Text('No hay productos')),
@@ -131,8 +91,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverGrid(
                   delegate: SliverChildBuilderDelegate(
                     (context, i) =>
-                        _ProductCard(item: filtered[i], isAdmin: isAdmin),
-                    childCount: filtered.length,
+                        _ProductCard(item: items[i], isAdmin: isAdmin),
+                    childCount: items.length,
                   ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
@@ -156,9 +116,9 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Actualizar',
             onPressed: () => context.read<ProductsProvider>().refresh(),
           ),
-          // Ícono de carrito con badge
+          // Carrito con badge
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 4),
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -202,27 +162,36 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+          // Logout
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Salir',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+          ),
         ],
       ),
+
       body: body,
 
-      // FAB solo admin (crear producto)
+      // FAB solo para admin → crear producto
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
-              icon: const Icon(Icons.add),
-              label: const Text('Producto'),
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ProductFormScreen()),
                 );
               },
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar'),
             )
           : null,
 
-      // Botón inferior para ir al carrito
+      // Botón inferior para revisar carrito (funcional)
       bottomNavigationBar: Consumer<CartProvider>(
-        builder: (context, cart, _) {
-          final hasItems = cart.totalItems > 0;
+        builder: (context, c, _) {
+          final hasItems = c.totalItems > 0;
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -242,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.shopping_cart_outlined),
                   label: Text(
                     hasItems
-                        ? 'Revisar carrito • ${cart.totalItems} ítems • \$${cart.totalPrice}'
+                        ? 'Revisar carrito • ${c.totalItems} ítems • \$${c.totalPrice}'
                         : 'Carrito vacío',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
@@ -291,55 +260,12 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _CategoryChips extends StatelessWidget {
-  final List<String> categories;
-  final String? selected;
-  final ValueChanged<String?> onSelect;
-  const _CategoryChips({
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final chips = <Widget>[];
-
-    // "Todas"
-    chips.add(
-      ChoiceChip(
-        label: const Text('Todas'),
-        selected: selected == null,
-        onSelected: (_) => onSelect(null),
-      ),
-    );
-
-    for (final c in categories) {
-      chips.add(
-        ChoiceChip(
-          label: Text(c),
-          selected: selected == c,
-          onSelected: (_) => onSelect(c),
-          selectedColor: scheme.primary.withOpacity(0.18),
-          labelStyle: TextStyle(
-            color: selected == c ? scheme.primary : scheme.onSurface,
-            fontWeight: selected == c ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
-      );
-    }
-
-    return Wrap(spacing: 8, runSpacing: 8, children: chips);
-  }
-}
-
 class _ProductCard extends StatelessWidget {
   final Product item;
   final bool isAdmin;
   const _ProductCard({required this.item, required this.isAdmin});
 
-  Future<void> _showAdminMenu(BuildContext context) async {
+  void _showAdminMenu(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -412,104 +338,107 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 1.5,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: InkWell(
-        onTap: () {
-          // Aquí podría ir una pantalla de detalle (mock simple)
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Vista: ${item.productName}')));
-        },
-        onLongPress: isAdmin ? () => _showAdminMenu(context) : null,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Imagen/placeholder + acciones arriba derecha
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            scheme.surfaceVariant.withOpacity(0.45),
-                            scheme.surfaceVariant.withOpacity(0.2),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.image_outlined, size: 44),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 10,
-                    top: 10,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _CircleIcon(
-                          icon: Icons.add_shopping_cart_outlined,
-                          onTap: () {
-                            context.read<CartProvider>().add(item, qty: 1);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Agregado: ${item.productName}'),
-                                duration: const Duration(milliseconds: 900),
-                              ),
-                            );
-                          },
-                        ),
-                        if (isAdmin) const SizedBox(width: 8),
-                        if (isAdmin)
-                          _CircleIcon(
-                            icon: Icons.more_horiz,
-                            onTap: () => _showAdminMenu(context),
+    return InkWell(
+      onLongPress: isAdmin ? () => _showAdminMenu(context) : null,
+      child: Card(
+        elevation: 1.5,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: InkWell(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Vista: ${item.productName}')),
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Imagen/placeholder + acciones
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              scheme.surfaceVariant.withOpacity(0.45),
+                              scheme.surfaceVariant.withOpacity(0.2),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
                           ),
-                      ],
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.image_outlined, size: 44),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            // Nombre / precio
-            Padding(
-              padding: const EdgeInsets.only(
-                left: 14,
-                right: 14,
-                top: 10,
-                bottom: 10,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.productName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _CircleIcon(
+                            icon: Icons.add_shopping_cart_outlined,
+                            onTap: () {
+                              context.read<CartProvider>().add(item, qty: 1);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Agregado: ${item.productName}',
+                                  ),
+                                  duration: const Duration(milliseconds: 900),
+                                ),
+                              );
+                            },
+                          ),
+                          if (isAdmin) const SizedBox(width: 8),
+                          if (isAdmin)
+                            _CircleIcon(
+                              icon: Icons.more_horiz,
+                              onTap: () => _showAdminMenu(context),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '\$${item.price}',
-                    style: TextStyle(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              // Nombre y precio
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 10,
+                  bottom: 10,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$${item.price}',
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
